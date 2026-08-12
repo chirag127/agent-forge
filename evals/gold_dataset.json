@@ -1,0 +1,67 @@
+[
+  {
+    "id": "calc_001",
+    "task": "Calculate 2 raised to the power of 10.",
+    "assertions": [
+      {"type": "contains", "value": "1024"}
+    ],
+    "tags": ["math", "calculator"]
+  },
+  {
+    "id": "calc_002",
+    "task": "What is the square root of 144?",
+    "assertions": [
+      {"type": "contains", "value": "12"}
+    ],
+    "tags": ["math", "calculator"]
+  },
+  {
+    "id": "python_001",
+    "task": "Write Python code to compute the sum of numbers 1 through 10 and tell me the result.",
+    "assertions": [
+      {"type": "contains", "value": "55"}
+    ],
+    "tags": ["python", "eval"]
+  },
+  {
+    "id": "reasoning_001",
+    "task": "What is the capital of France?",
+    "assertions": [
+      {"type": "contains_ci", "value": "paris"}
+    ],
+    "tags": ["reasoning", "geography"]
+  },
+  {
+    "id": "reasoning_002",
+    "task": "List three primary colors.",
+    "assertions": [
+      {"type": "contains_any_ci", "values": ["red", "blue", "yellow"]}
+    ],
+    "tags": ["reasoning"]
+  },
+  {
+    "id": "multi_step_001",
+    "task": "Calculate (15 * 4) + (100 / 5) and then tell me if the result is greater than 70.",
+    "assertions": [
+      {"type": "contains", "value": "80"},
+      {"type": "contains_any_ci", "values": ["yes", "greater", "true"]}
+    ],
+    "tags": ["math", "multi-step"]
+  },
+  {
+    "id": "code_001",
+    "task": "Write and evaluate Python code that generates a list of even numbers from 1 to 10.",
+    "assertions": [
+      {"type": "contains_any", "values": ["2", "4", "6", "8", "10"]}
+    ],
+    "tags": ["python", "eval"]
+  },
+  {
+    "id": "reasoning_003",
+    "task": "Explain what a Fibonacci sequence is and give the first 5 numbers.",
+    "assertions": [
+      {"type": "contains_any", "values": ["0, 1, 1, 2, 3", "1, 1, 2, 3, 5"]}
+    ],
+    "tags": ["reasoning", "math"]
+  }
+]

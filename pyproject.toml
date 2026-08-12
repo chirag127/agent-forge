@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-forge"
+version = "0.1.0"
+description = "Multi-agent LLM orchestration platform — planner/executor/critic with tool-calling, evals, and OpenTelemetry"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.13"
+authors = [{ name = "Chirag Singhal", email = "chirag@oriz.in" }]
+keywords = ["llm", "agents", "orchestration", "tool-calling", "evals"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "g4f>=0.4.0",
+    "httpx>=0.28.0",
+    "structlog>=24.4.0",
+    "typer>=0.15.0",
+    "rich>=13.9.0",
+    "opentelemetry-sdk>=1.28.0",
+    "opentelemetry-api>=1.28.0",
+    "jsonschema>=4.23.0",
+    "pydantic>=2.10.0",
+    "anyio>=4.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "respx>=0.22.0",
+]
+
+[project.scripts]
+agent-forge = "agent_forge.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent_forge"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--cov=agent_forge --cov-report=term-missing --cov-fail-under=80"
+markers = [
+    "integration: live network tests (skip with -m 'not integration' when offline)",
+]
+
+[tool.coverage.run]
+omit = ["tests/*", "evals/*"]
