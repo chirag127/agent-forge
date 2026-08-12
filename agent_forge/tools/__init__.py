@@ -209,7 +209,10 @@ def file_read(path: str, workdir: str = ".") -> str:
     """Read file, restricted to workdir via path resolution check."""
     base = Path(workdir).resolve()
     target = (base / path).resolve()
-    if not str(target).startswith(str(base)):
+    # Use is_relative_to (Python 3.9+) to avoid prefix-collision bugs
+    try:
+        target.relative_to(base)
+    except ValueError:
         raise PermissionError(f"Path '{path}' escapes workdir '{workdir}'")
     if not target.exists():
         raise FileNotFoundError(f"File not found: {target}")

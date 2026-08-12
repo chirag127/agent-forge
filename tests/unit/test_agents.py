@@ -221,3 +221,31 @@ def test_orchestrator_step_status_tracking() -> None:
 
     assert all(s.status == "done" for s in result.steps)
     assert result.final_answer == "Step 2: Output two."
+
+
+def test_orchestrator_arun() -> None:
+    """Orchestrator.arun delegates to run and returns RunResult."""
+    import asyncio
+
+    plan_json = json.dumps({
+        "steps": [{"index": 1, "description": "Think", "tool": None, "tool_args": {}}]
+    })
+    responses = [
+        plan_json,
+        "Thought.",
+        json.dumps({"verdict": "pass", "reason": "ok"}),
+    ]
+    call_idx = 0
+
+    def side_effect(messages, **kwargs):  # noqa: ANN001
+        nonlocal call_idx
+        r = LLMResponse(content=responses[call_idx], provider="mock", model="mock")
+        call_idx += 1
+        return r
+
+    with patch.object(LLMProvider, "complete", side_effect=side_effect):
+        orch = Orchestrator(llm_config=LLMConfig())
+        result = asyncio.run(orch.arun("Think about it"))
+
+    assert isinstance(result, RunResult)
+    assert result.passed is True

@@ -146,6 +146,17 @@ def test_file_read_escape_raises(tmp_path: Path) -> None:
         file_read("../secret.txt", workdir=str(tmp_path))
 
 
+def test_file_read_prefix_collision_safe(tmp_path: Path) -> None:
+    """Sibling dir whose name is a prefix of workdir must not be readable."""
+    sibling = tmp_path.parent / (tmp_path.name + "_sibling")
+    sibling.mkdir()
+    (sibling / "data.txt").write_text("secret")
+    # Construct a relative path that resolves into the sibling
+    rel = "../" + tmp_path.name + "_sibling/data.txt"
+    with pytest.raises(PermissionError):
+        file_read(rel, workdir=str(tmp_path))
+
+
 def test_file_read_missing_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         file_read("nope.txt", workdir=str(tmp_path))
