@@ -1,23 +1,34 @@
 # Agent Forge
 
-**Live demo:** `pip install agent-forge && agent-forge run "Calculate 2^10"` | **Python 3.13** | [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://python.org)
+> Multi-agent LLM orchestration for Python — a Planner → Executor → Critic pipeline with tool-calling, an eval harness, structured observability, and a **keyless** LLM backend (no API key required).
 
-Multi-agent LLM orchestration platform — Planner → Executor → Critic pipeline with pluggable tool-calling, an eval harness, structured observability, and a keyless LLM backend (no API key required).
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/chirag127/agent-forge?style=social)](https://github.com/chirag127/agent-forge/stargazers)
+[![Last commit](https://img.shields.io/github/last-commit/chirag127/agent-forge)](https://github.com/chirag127/agent-forge/commits)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg?logo=python&logoColor=white)](https://python.org)
 
----
+## What it is / why it exists
+
+Wiring up a multi-agent LLM system usually means an API key, a vendor SDK, and boilerplate to route tasks between agents. **Agent Forge** collapses that into one dependency: a task goes in, a **Planner** decomposes it, an **Executor** runs each step (calling tools where needed), and a **Critic** judges the result. It ships with an LLM-as-judge eval harness, OpenTelemetry spans, and a keyless provider chain — so you can build and benchmark agents with `pip install` and zero credentials.
+
+- **Repo**: <https://github.com/chirag127/agent-forge>
+- **Landing (GH Pages)**: <https://chirag127.github.io/agent-forge/>
+- **PyPI**: planned (`agent-forge`) — install from source today.
+
+⭐ If this is useful, please **star the repo** — it helps others find it.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    User([User Task]) --> CLI
+    User([User Task]) --> CLI[agent-forge run]
     CLI --> Orchestrator
 
     subgraph Orchestrator
-        P[Planner Agent\nDecomposes task → Steps]
-        E[Executor Agent\nRuns each step]
-        C[Critic Agent\nVerifies result]
-        BB[(Shared Blackboard\nMessage Bus)]
+        P[Planner Agent<br/>decomposes task → steps]
+        E[Executor Agent<br/>runs each step]
+        C[Critic Agent<br/>pass/fail verdict]
+        BB[(Shared Blackboard<br/>async pub/sub)]
         P -->|plan| E
         E -->|write results| BB
         BB -->|context| C
@@ -25,65 +36,115 @@ flowchart TD
     end
 
     subgraph Tools
-        T1[web_fetch\nhttpx GET]
-        T2[python_eval\nAST sandbox]
-        T3[file_read\nworkdir-restricted]
-        T4[calculator\nmath eval]
+        T1[web_fetch<br/>httpx GET]
+        T2[python_eval<br/>AST sandbox]
+        T3[file_read<br/>workdir-restricted]
+        T4[calculator<br/>math eval]
     end
 
     subgraph LLM Provider
-        K[kilo.ai\nfree auto-router]
-        PL[pollinations.ai\nfallback]
-        G[g4f\nlast-resort]
+        K[kilo.ai<br/>free auto-router]
+        PL[pollinations.ai<br/>fallback]
+        G[g4f<br/>last resort]
         K -->|fail| PL
         PL -->|fail| G
     end
 
     E --> Tools
-    P & E & C --> LLM Provider
-    Orchestrator --> RunResult([RunResult\nanswer + verdict])
+    P & E & C --> K
+    Orchestrator --> RunResult([RunResult<br/>answer + verdict])
 ```
 
 ## How it works
 
-**Planner** receives a task, queries the LLM, and decomposes it into ordered steps — each step either invokes a tool (JSON-specified name + args) or is a pure reasoning step. Output is parsed JSON.
+- **Planner** — queries the LLM and decomposes the task into ordered steps; each step is either a tool call (JSON name + args) or a pure reasoning step. Output is parsed JSON.
+- **Executor** — runs each step in sequence. Tool args are validated against the tool's JSON Schema, the function is called, and the LLM synthesizes the raw output into a finding. Context threads forward.
+- **Critic** — reviews the full step log and returns a `pass`/`fail` verdict with reason + confidence (LLM-as-judge).
+- **Blackboard** — an async-safe shared key-value store with pub/sub; the communication layer for multi-agent runs.
 
-**Executor** runs each step in sequence. If a tool is specified, it validates the args against the tool's JSON Schema, calls the function, then asks the LLM to synthesize the raw tool output into a natural-language finding. Reasoning steps go straight to the LLM. Context from prior steps is threaded forward.
+## Features
 
-**Critic** reviews the full step log and produces a `pass`/`fail` verdict with a reason and confidence score. This mirrors real LLM-as-judge eval patterns used in production systems.
+- **Planner / Executor / Critic** pipeline out of the box
+- **Pluggable tools** via a `@tool` decorator with JSON Schema validation
+- **Keyless LLM** — kilo.ai → pollinations.ai → g4f failover, no credentials
+- **Eval harness** — gold dataset with typed assertions incl. `llm_judge`
+- **Observability** — structlog structured logs + OpenTelemetry spans
+- **Async-safe blackboard** for multi-agent collaboration
+- **CLI + library** — use `agent-forge run` or import the `Orchestrator`
 
-**Blackboard** is an async-safe shared key-value store with pub/sub — the communication layer for multi-agent runs where multiple named agents collaborate.
+## Tech stack
 
----
+- **Python 3.13**
+- **Typer** + **Rich** (CLI)
+- **httpx** (async HTTP / tools)
+- **jsonschema** (tool arg validation) · **pydantic** (models)
+- **structlog** + **OpenTelemetry SDK/API** (observability)
+- **g4f** (keyless provider, last-resort) · **anyio** (async)
+- **pytest** / **pytest-asyncio** / **pytest-cov** / **respx** (tests)
 
-## Quickstart
+## Repo structure
+
+```text
+agent-forge/
+├── agent_forge/
+│   ├── agents/            # Orchestrator: Planner, Executor, Critic
+│   ├── tools/             # @tool registry + calculator, python_eval, web_fetch, file_read
+│   ├── providers/         # keyless LLM chain (kilo → pollinations → g4f)
+│   ├── observability/     # structlog + OpenTelemetry configure()
+│   ├── blackboard.py      # async shared KV store + pub/sub
+│   └── cli.py             # Typer app: run / eval
+├── evals/
+│   ├── gold_dataset.json  # benchmark tasks with typed assertions
+│   └── run_eval.py        # scores pass/fail → report.md
+├── tests/                 # unit + integration + live-network
+└── pyproject.toml
+```
+
+## Quick start
+
+Requires Python `>=3.13`.
 
 ```bash
-pip install agent-forge
-# or from source
+# Install from source
 git clone https://github.com/chirag127/agent-forge
 cd agent-forge
-python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+python -m venv .venv && source .venv/bin/activate   # .venv\Scripts\activate on Windows
 pip install -e .
 
 # Run a task
 agent-forge run "What is the square root of 2025?"
 
-# Run with verbose logs + OpenTelemetry spans
-agent-forge run "Calculate compound interest: 10000 at 8% for 5 years" --verbose --otel
+# Verbose logs + OpenTelemetry spans
+agent-forge run "Compound interest: 10000 at 8% for 5 years" --verbose --otel
 
-# Run eval harness over gold dataset
+# Run the eval harness over the gold dataset
 agent-forge eval
-
-# Custom dataset / report path
-agent-forge eval --dataset path/to/gold.json --report path/to/report.md
 ```
 
----
+> Once published to PyPI, `pip install agent-forge` will work directly.
 
-## Tool system
+## CLI reference
 
-Tools are registered with a decorator:
+| Command | What it does | Key options |
+|---|---|---|
+| `agent-forge run "<task>"` | Run a task through Planner → Executor → Critic; prints steps table + final answer + critic verdict | `--verbose/-v`, `--otel`, `--timeout/-t <sec>` |
+| `agent-forge eval` | Run the eval harness over the gold dataset; writes a report | `--dataset/-d <path>`, `--report/-o <path>`, `--verbose/-v`, `--timeout/-t` |
+
+### Library usage
+
+```python
+from agent_forge.agents import Orchestrator
+from agent_forge.blackboard import Blackboard
+
+bb = Blackboard()
+orch = Orchestrator(blackboard=bb)
+result = orch.run("Summarize and evaluate: the Fibonacci sequence")
+
+print(result.final_answer, result.passed)
+print(bb.snapshot())   # inspect shared state
+```
+
+### Registering a tool
 
 ```python
 from agent_forge.tools import tool
@@ -101,91 +162,55 @@ def my_tool(query: str) -> str:
     return f"Result for: {query}"
 ```
 
-Built-in tools:
+### Built-in tools
 
 | Tool | What it does |
 |---|---|
 | `calculator` | Evaluates math expressions (`sqrt`, `**`, trig) |
 | `python_eval` | Runs sandboxed Python — no imports, no dunder access |
-| `web_fetch` | HTTP GET via httpx, strips HTML, truncates at 4 000 chars |
+| `web_fetch` | HTTP GET via httpx, strips HTML, truncates at 4000 chars |
 | `file_read` | Reads files restricted to a working directory |
 
----
-
-## LLM provider
-
-No API keys. Provider chain: **kilo.ai** (free auto-router) → **pollinations.ai** (fallback) → **g4f** (last resort). Any provider failure silently cascades to the next. Swap the chain via `LLMConfig`:
-
-```python
-from agent_forge.providers import LLMProvider, LLMConfig
-
-provider = LLMProvider(LLMConfig(timeout=30))
-resp = provider.complete([Message("user", "Hello")])
-print(resp.content, resp.provider, resp.latency_ms)
-```
-
----
-
-## Eval harness
-
-`evals/gold_dataset.json` — 8 tasks spanning math, reasoning, Python eval, multi-step. Each case has typed assertions (`contains`, `contains_ci`, `contains_any`, `not_contains`, `llm_judge`).
-
-`evals/run_eval.py` — runs the orchestrator over every case, scores pass/fail, writes `evals/report.md`.
-
-```bash
-python evals/run_eval.py
-# or via CLI:
-agent-forge eval
-```
-
-The eval harness is the pattern used in production LLM systems to measure agent capability over a fixed benchmark. It supports adding an `llm_judge` assertion type for cases where string matching is insufficient.
-
----
-
 ## Observability
-
-Every agent step, tool call, token count, and latency is logged via **structlog** (structured JSON or pretty console). **OpenTelemetry** spans (planner.plan, executor.step, critic.verify, orchestrator.run) are emitted to a console exporter by default — drop in any OTLP-compatible backend (Jaeger, Honeycomb, etc.) without code changes.
 
 ```python
 from agent_forge.observability import configure
 configure(level="DEBUG", otel=True, json_logs=True)
 ```
 
----
-
-## Multi-agent usage
-
-```python
-from agent_forge.agents import Orchestrator
-from agent_forge.blackboard import Blackboard
-
-bb = Blackboard()
-orch = Orchestrator(blackboard=bb)
-result = orch.run("Summarize and evaluate: the Fibonacci sequence")
-
-# inspect shared state
-print(bb.snapshot())
-print(bb.history())
-```
-
----
+Every agent step, tool call, token count, and latency is logged via **structlog**. **OpenTelemetry** spans (`planner.plan`, `executor.step`, `critic.verify`, `orchestrator.run`) go to a console exporter by default — point `OTEL_EXPORTER_OTLP_ENDPOINT` at any OTLP backend (Jaeger, Honeycomb, …) without code changes.
 
 ## Tests
 
 ```bash
 pip install -e ".[dev]"
-# unit + integration (no network):
-pytest tests/unit/ tests/integration/ -v
-# live network tests (hit real LLM):
-pytest tests/test_llm_live.py -v -s
-# full suite with coverage:
-pytest
+pytest tests/unit/ tests/integration/ -v   # no network
+pytest tests/test_llm_live.py -v -s         # live LLM
+pytest                                      # full suite, coverage-gated at 80%
 ```
 
-Coverage target: 80% of `agent_forge/` core.
+## Cost
 
----
+**$0.** The keyless provider chain (kilo.ai → pollinations.ai → g4f) needs no API key and no card. Self-host anywhere Python runs.
 
-## Resume keywords this repo backs
+## Part of the oriz family
 
-`multi-agent orchestration` · `LLM evals / LLM-as-judge` · `planner-executor-critic` · `tool-calling / function-calling` · `JSON Schema validation` · `OpenTelemetry instrumentation` · `structlog structured logging` · `AST sandboxed code execution` · `provider failover / resilience` · `async Python / asyncio` · `pytest unit + integration` · `keyless LLM inference`
+One of ~80 projects in the **oriz** family. See the blog at <https://blog.oriz.in>.
+
+## Contributing
+
+Issues and PRs welcome. Conventional commits, `main` only. Keep `pytest` green (80% coverage gate).
+
+## License
+
+MIT © Chirag Singhal — see [LICENSE](LICENSE).
+
+## Author
+
+Chirag Singhal · <chirag@oriz.in>
+
+## Status
+
+**Beta** (v0.1.0) — core pipeline, tools, evals, and observability are working and tested. PyPI publish and additional built-in tools are on the roadmap.
+
+_Conventional commits are the changelog._
